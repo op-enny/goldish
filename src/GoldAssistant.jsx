@@ -1,0 +1,1020 @@
+import React, { useState, useRef } from 'react';
+
+// ============================================
+// CONFIGURATION - Reads from .env file
+// ============================================
+// For Vite: use import.meta.env.VITE_*
+// For Create React App: use process.env.REACT_APP_*
+// For Next.js: use process.env.NEXT_PUBLIC_*
+
+const CONFIG = {
+  // Toggle between real API and mock data
+  USE_REAL_API: import.meta.env.VITE_USE_REAL_API === 'true',
+
+  // OpenAI API Key from .env
+  OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY || '',
+
+  // Model selection - GPT-4.1-mini recommended for best price/performance
+  MODEL: import.meta.env.VITE_OPENAI_MODEL || 'gpt-4.1-mini',
+
+  // OpenAI API endpoint
+  API_URL: 'https://api.openai.com/v1/chat/completions'
+};
+
+// Debug: Log config on load (remove in production)
+console.log('🔧 Config:', {
+  USE_REAL_API: CONFIG.USE_REAL_API,
+  MODEL: CONFIG.MODEL,
+  API_KEY_SET: !!CONFIG.OPENAI_API_KEY
+});
+
+// ============================================
+// OPENAI VISION PROMPT - Optimized for Jewelry Analysis
+// ============================================
+const getAnalysisPrompt = (lang, includeStory) => `You are an expert jewelry analyst specializing in gold jewelry assessment.
+Analyze this jewelry image and provide detailed pre-information.
+
+CRITICAL RULES:
+1. All estimates are NON-BINDING and for informational purposes only
+2. NEVER provide exact prices or monetary valuations
+3. Use ranges for weight estimates (e.g., "4.2-5.1 grams")
+4. Always indicate uncertainty with phrases like "approximately", "estimated", "appears to be"
+5. Use professional, neutral, consultative language
+6. If uncertain about something, say "unclear" or "cannot determine from image"
+7. **CRITICAL: All string values in the JSON response MUST be in ${lang}. Only the keys must remain in English.**
+8. Translate technical terms (like 'Diamond', 'Round brilliant', 'Prong') to ${lang}.
+
+${includeStory ? `STORY GENERATION (OPTIONAL OPT-IN ACTIVE):
+- Write a short, fictional story about the *spirit* or *style* of this jewelry.
+- **CRITICAL:** DO NOT claim it is centuries old or ancient. Instead, describe how its design *reminds* us of that era or captures that nostalgia.
+- It can be a vintage piece or a modern piece with a retro soul.
+- Tone: Emotional, slightly melancholic but heartwarming, bringing a smile to the user's face.
+- Max 200 characters.
+- "story" field in JSON must contain this text.` : ''}
+
+Return ONLY a valid JSON object with this exact structure (no markdown, no explanation):
+
+{
+  "basic": {
+    "category": "Ring/Necklace/Bracelet/Earrings/Pendant/Brooch/Watch/Other",
+    "metalColor": "Yellow Gold/White Gold/Rose Gold/Two-tone/Platinum/Silver/Unknown",
+    "estimatedPurity": "Estimated karat with confidence (e.g., '18K (750) - high confidence' or '14K-18K range')",
+    "estimatedWeight": "Weight range in grams (e.g., '4.2 - 5.1 grams')",
+    "condition": "Excellent/Very Good/Good/Fair/Poor with brief note"
+  },
+  "gemstone": {
+    "detected": true or false,
+    "stoneType": "Primary stone type or null if none",
+    "stoneCut": "Cut style or null",
+    "stoneColor": "Color description or null",
+    "stoneClarity": "Clarity assessment or null",
+    "estimatedCarat": "Carat range or null (e.g., '0.40 - 0.60 ct')",
+    "stoneCount": "Description of stones (e.g., '1 center + 12 accent stones') or null",
+    "setting": "Setting type (Prong/Bezel/Channel/Pavé/Tension/Invisible) or null"
+  },
+  "design": {
+    "style": "Design style (Classic/Modern/Vintage/Art Deco/Victorian/Minimalist/Bohemian/etc)",
+    "era": "Estimated manufacturing period (e.g., 'Modern 2010-2020', 'Vintage 1960s-1970s', 'Antique pre-1920')",
+    "origin": "Possible origin/style influence (European/Italian/Turkish/Middle Eastern/Asian/American/Unknown)",
+    "craftsmanship": "Quality assessment (Exceptional/High/Good/Average/Basic) with brief note",
+    "pattern": "Notable design elements or patterns"
+  },
+  "technical": {
+    "hallmarkVisible": "Yes/No/Partially with details if visible (e.g., 'Yes - 750 stamp visible')",
+    "widthThickness": "Estimated dimensions if determinable (e.g., 'Band width: ~2.5mm')",
+    "specialFeatures": "Any notable features (filigree, engraving, milgrain, etc)"
+  },
+  "story": ${includeStory ? '"The fictional story text in ' + lang + ' (max 200 chars)"' : 'null'},
+  "confidenceScore": 75
+}
+
+The confidenceScore should be 0-100 based on image quality and analysis certainty.`;
+
+// ============================================
+// TRANSLATIONS - DE, TR, AR
+// ============================================
+const translations = {
+  de: {
+    welcome: "Willkommen",
+    subtitle: "Digitale Vor-Information für Ihren Goldschmuck",
+    selectLanguage: "Sprache wählen",
+    continue: "Weiter",
+    back: "Zurück",
+    importantNote: "Wichtiger Hinweis",
+    disclaimer1: "Diese App bietet ausschließlich visuelle Vor-Informationen.",
+    disclaimer2: "Alle Angaben sind KI-basierte Schätzungen und unverbindlich.",
+    disclaimer3: "Die endgültige Bewertung erfolgt nur im Geschäft.",
+    understood: "Verstanden",
+    uploadTitle: "Foto hochladen",
+    uploadSubtitle: "Machen Sie ein Foto oder wählen Sie aus der Galerie",
+    takePhoto: "Foto aufnehmen",
+    chooseGallery: "Aus Galerie wählen",
+    analyzing: "Analysiere Ihr Schmuckstück...",
+    analyzingSteps: [
+      "Bildqualität wird geprüft...",
+      "Metallanalyse läuft...",
+      "Edelsteine werden erkannt...",
+      "Designmerkmale werden analysiert...",
+      "Bericht wird erstellt..."
+    ],
+    result: "Detaillierte Vor-Information",
+    resultDisclaimer: "KI-basierte Schätzung • Unverbindlich",
+    basicInfo: "Grundinformationen",
+    category: "Kategorie",
+    metalColor: "Metallfarbe",
+    estimatedPurity: "Geschätzte Reinheit",
+    estimatedWeight: "Geschätztes Gewicht",
+    condition: "Zustand",
+    gemstoneAnalysis: "Edelstein-Analyse",
+    stoneType: "Steinart",
+    stoneCut: "Schliff",
+    stoneColor: "Farbe",
+    stoneClarity: "Reinheit",
+    estimatedCarat: "Geschätzte Karat",
+    stoneCount: "Anzahl der Steine",
+    setting: "Fassung",
+    designAnalysis: "Design & Stil",
+    designStyle: "Designstil",
+    era: "Geschätzte Epoche",
+    origin: "Mögliche Herkunft",
+    craftsmanship: "Handwerkskunst",
+    pattern: "Muster/Motiv",
+    technicalDetails: "Technische Details",
+    hallmarkVisible: "Punze sichtbar",
+    widthThickness: "Breite/Stärke",
+    specialFeatures: "Besonderheiten",
+    goldPrices: "Aktuelle Goldpreise",
+    priceDisclaimer: "Diese Preise dienen nur zur allgemeinen Information.",
+    bookAppointment: "Termin vereinbaren",
+    bookSubtitle: "Besuchen Sie uns für eine professionelle Bewertung",
+    selectDate: "Datum wählen",
+    selectTime: "Uhrzeit wählen",
+    confirmBooking: "Termin bestätigen",
+    bookingConfirmed: "Termin bestätigt!",
+    seeYouSoon: "Wir freuen uns auf Ihren Besuch",
+    addToCalendar: "Zum Kalender hinzufügen",
+    startOver: "Neu starten",
+    perGram: "pro Gramm",
+    finalNote: "Die endgültige Bewertung ist nur im Geschäft möglich.",
+    viewFullReport: "Vollständigen Bericht anzeigen",
+    hideDetails: "Details ausblenden",
+    aiConfidence: "KI-Zuverlässigkeit",
+    analysisError: "Analyse fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    noGemstone: "Keine Edelsteine erkannt",
+    poweredBy: "Powered by OpenAI Vision",
+    apiNotConfigured: "API nicht konfiguriert. Bitte .env Datei prüfen.",
+    retryAnalysis: "Erneut versuchen",
+    storyOption: "Eine Geschichte dazu?",
+    storyTitle: "Die Geschichte des Schmuckstücks"
+  },
+  tr: {
+    welcome: "Hoş Geldiniz",
+    subtitle: "Altın takılarınız için dijital ön bilgilendirme",
+    selectLanguage: "Dil Seçin",
+    continue: "Devam",
+    back: "Geri",
+    importantNote: "Önemli Bilgi",
+    disclaimer1: "Bu uygulama yalnızca görsel ön bilgi sağlar.",
+    disclaimer2: "Tüm bilgiler yapay zeka tahminidir ve bağlayıcı değildir.",
+    disclaimer3: "Kesin değerlendirme yalnızca mağazada yapılır.",
+    understood: "Anladım",
+    uploadTitle: "Fotoğraf Yükle",
+    uploadSubtitle: "Fotoğraf çekin veya galeriden seçin",
+    takePhoto: "Fotoğraf Çek",
+    chooseGallery: "Galeriden Seç",
+    analyzing: "Takınız analiz ediliyor...",
+    analyzingSteps: [
+      "Görüntü kalitesi kontrol ediliyor...",
+      "Metal analizi yapılıyor...",
+      "Değerli taşlar tespit ediliyor...",
+      "Tasarım özellikleri inceleniyor...",
+      "Rapor hazırlanıyor..."
+    ],
+    result: "Detaylı Ön Bilgilendirme",
+    resultDisclaimer: "Yapay zeka tahmini • Bağlayıcı değildir",
+    basicInfo: "Temel Bilgiler",
+    category: "Kategori",
+    metalColor: "Metal Rengi",
+    estimatedPurity: "Tahmini Ayar",
+    estimatedWeight: "Tahmini Ağırlık",
+    condition: "Durum",
+    gemstoneAnalysis: "Değerli Taş Analizi",
+    stoneType: "Taş Türü",
+    stoneCut: "Kesim",
+    stoneColor: "Renk",
+    stoneClarity: "Berraklık",
+    estimatedCarat: "Tahmini Karat",
+    stoneCount: "Taş Sayısı",
+    setting: "Yuva Tipi",
+    designAnalysis: "Tasarım ve Stil",
+    designStyle: "Tasarım Stili",
+    era: "Tahmini Dönem",
+    origin: "Olası Menşei",
+    craftsmanship: "İşçilik Kalitesi",
+    pattern: "Desen/Motif",
+    technicalDetails: "Teknik Detaylar",
+    hallmarkVisible: "Ayar Damgası",
+    widthThickness: "Genişlik/Kalınlık",
+    specialFeatures: "Özel Özellikler",
+    goldPrices: "Güncel Altın Fiyatları",
+    priceDisclaimer: "Bu fiyatlar yalnızca genel bilgi amaçlıdır.",
+    bookAppointment: "Randevu Al",
+    bookSubtitle: "Profesyonel değerlendirme için bizi ziyaret edin",
+    selectDate: "Tarih Seçin",
+    selectTime: "Saat Seçin",
+    confirmBooking: "Randevuyu Onayla",
+    bookingConfirmed: "Randevu Onaylandı!",
+    seeYouSoon: "Ziyaretinizi bekliyoruz",
+    addToCalendar: "Takvime Ekle",
+    startOver: "Yeniden Başla",
+    perGram: "gram başına",
+    finalNote: "Kesin değerlendirme yalnızca mağazada yapılabilir.",
+    viewFullReport: "Tam Raporu Görüntüle",
+    hideDetails: "Detayları Gizle",
+    aiConfidence: "AI Güvenilirlik",
+    analysisError: "Analiz başarısız. Lütfen tekrar deneyin.",
+    noGemstone: "Değerli taş tespit edilmedi",
+    poweredBy: "OpenAI Vision ile çalışır",
+    apiNotConfigured: "API yapılandırılmamış. Lütfen .env dosyasını kontrol edin.",
+    retryAnalysis: "Tekrar Dene",
+    storyOption: "Hikayesini de duymak ister misiniz?",
+    storyTitle: "Bu Parçanın Hikayesi"
+  },
+  ar: {
+    welcome: "مرحباً",
+    subtitle: "معلومات أولية رقمية لمجوهراتك الذهبية",
+    selectLanguage: "اختر اللغة",
+    continue: "متابعة",
+    back: "رجوع",
+    importantNote: "ملاحظة مهمة",
+    disclaimer1: "هذا التطبيق يقدم معلومات مرئية أولية فقط.",
+    disclaimer2: "جميع البيانات تقديرات ذكاء اصطناعي وغير ملزمة.",
+    disclaimer3: "التقييم النهائي يتم فقط في المتجر.",
+    understood: "فهمت",
+    uploadTitle: "تحميل صورة",
+    uploadSubtitle: "التقط صورة أو اختر من المعرض",
+    takePhoto: "التقاط صورة",
+    chooseGallery: "اختر من المعرض",
+    analyzing: "جاري تحليل مجوهراتك...",
+    analyzingSteps: [
+      "جاري فحص جودة الصورة...",
+      "جاري تحليل المعدن...",
+      "جاري اكتشاف الأحجار الكريمة...",
+      "جاري تحليل ميزات التصميم...",
+      "جاري إعداد التقرير..."
+    ],
+    result: "معلومات أولية مفصلة",
+    resultDisclaimer: "تقدير بالذكاء الاصطناعي • غير ملزم",
+    basicInfo: "المعلومات الأساسية",
+    category: "الفئة",
+    metalColor: "لون المعدن",
+    estimatedPurity: "النقاء المقدر",
+    estimatedWeight: "الوزن المقدر",
+    condition: "الحالة",
+    gemstoneAnalysis: "تحليل الأحجار الكريمة",
+    stoneType: "نوع الحجر",
+    stoneCut: "القطع",
+    stoneColor: "اللون",
+    stoneClarity: "النقاء",
+    estimatedCarat: "القيراط المقدر",
+    stoneCount: "عدد الأحجار",
+    setting: "نوع الإعداد",
+    designAnalysis: "التصميم والأسلوب",
+    designStyle: "أسلوب التصميم",
+    era: "الحقبة المقدرة",
+    origin: "المنشأ المحتمل",
+    craftsmanship: "جودة الصنعة",
+    pattern: "النمط/الزخرفة",
+    technicalDetails: "التفاصيل التقنية",
+    hallmarkVisible: "الدمغة مرئية",
+    widthThickness: "العرض/السماكة",
+    specialFeatures: "ميزات خاصة",
+    goldPrices: "أسعار الذهب الحالية",
+    priceDisclaimer: "هذه الأسعار للمعلومات العامة فقط.",
+    bookAppointment: "حجز موعد",
+    bookSubtitle: "زورونا للحصول على تقييم احترافي",
+    selectDate: "اختر التاريخ",
+    selectTime: "اختر الوقت",
+    confirmBooking: "تأكيد الموعد",
+    bookingConfirmed: "تم تأكيد الموعد!",
+    seeYouSoon: "نتطلع لزيارتكم",
+    addToCalendar: "إضافة إلى التقويم",
+    startOver: "البدء من جديد",
+    perGram: "للجرام",
+    finalNote: "التقييم النهائي ممكن فقط في المتجر.",
+    viewFullReport: "عرض التقرير الكامل",
+    hideDetails: "إخفاء التفاصيل",
+    aiConfidence: "موثوقية AI",
+    analysisError: "فشل التحليل. يرجى المحاولة مرة أخرى.",
+    noGemstone: "لم يتم اكتشاف أحجار كريمة",
+    poweredBy: "يعمل بواسطة OpenAI Vision",
+    apiNotConfigured: "API غير مهيأ. يرجى التحقق من ملف .env",
+    retryAnalysis: "حاول مرة أخرى",
+    storyOption: "هل تود سماع قصتها؟",
+    storyTitle: "قصة المجوهرات"
+  }
+};
+
+// ============================================
+// MOCK DATA - Used when API is disabled
+// ============================================
+const getMockAnalysis = () => ({
+  basic: {
+    category: "Ring",
+    metalColor: "Yellow Gold",
+    estimatedPurity: "18 Karat (750) - high confidence",
+    estimatedWeight: "4.2 - 5.1 grams",
+    condition: "Very Good - minimal wear"
+  },
+  gemstone: {
+    detected: true,
+    stoneType: "Diamond (probable)",
+    stoneCut: "Brilliant Round",
+    stoneColor: "Near colorless (G-H range)",
+    stoneClarity: "Eye-clean (estimated VS-SI)",
+    estimatedCarat: "0.40 - 0.60 ct",
+    stoneCount: "1 center stone + 12 accent stones",
+    setting: "6-prong with pavé band"
+  },
+  design: {
+    style: "Classic Solitaire with Halo",
+    era: "Modern (2010-2020)",
+    origin: "European craftsmanship",
+    craftsmanship: "High - precise stone alignment",
+    pattern: "Halo design with milgrain details"
+  },
+  technical: {
+    hallmarkVisible: "Yes - 750 stamp visible inside band",
+    widthThickness: "Band width: ~2.5mm, Height: ~7mm",
+    specialFeatures: "Milgrain edge detail on band"
+  },
+  story: "This ring likely witnessed a secret 1970s romance in Istanbul. Its sparkle carries the melancholic joy of a love that dared to defy tradition, reminding you that true beauty acts as a bridge between hearts.",
+  confidenceScore: 87
+});
+
+// ============================================
+// OPENAI API FUNCTION
+// ============================================
+const analyzeWithOpenAI = async (base64Image, lang, includeStory) => {
+  // Check if using mock data
+  if (!CONFIG.USE_REAL_API) {
+    console.log('📦 Using mock data (USE_REAL_API=false)');
+    await new Promise(resolve => setTimeout(resolve, 3500));
+    const mock = getMockAnalysis();
+    if (!includeStory) mock.story = null;
+    return mock;
+  }
+
+  // Check if API key is configured
+  if (!CONFIG.OPENAI_API_KEY) {
+    throw new Error('API_KEY_NOT_CONFIGURED');
+  }
+
+  console.log('🚀 Calling OpenAI API with model:', CONFIG.MODEL);
+
+  try {
+    const prompt = getAnalysisPrompt(lang, includeStory);
+    const response = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${CONFIG.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: CONFIG.MODEL,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: prompt
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: base64Image,
+                  detail: 'auto'
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 1200,
+        temperature: 0.3
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API Error:', response.status, errorData);
+      throw new Error(`API_ERROR_${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('✅ API Response received');
+
+    const content = data.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error('EMPTY_RESPONSE');
+    }
+
+    // Parse JSON response
+    const analysis = JSON.parse(content);
+    console.log('📊 Analysis complete, confidence:', analysis.confidenceScore);
+
+    return analysis;
+
+  } catch (error) {
+    console.error('❌ OpenAI API Error:', error);
+    throw error;
+  }
+};
+
+// ============================================
+// GOLD PRICES DATA
+// ============================================
+const goldPrices = [
+  { karat: "8K (333)", price: "17.20" },
+  { karat: "14K (585)", price: "38.50" },
+  { karat: "18K (750)", price: "49.20" },
+  { karat: "21K (875)", price: "57.40" },
+  { karat: "22K (916)", price: "60.10" },
+  { karat: "24K (999)", price: "65.80" }
+];
+
+const availableTimes = ["10:00", "11:00", "13:00", "14:00", "15:00", "16:00"];
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
+export default function GoldAssistant() {
+  const [step, setStep] = useState(0);
+  const [lang, setLang] = useState('tr');
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzingStep, setAnalyzingStep] = useState(0);
+  const [analysisResult, setAnalysisResult] = useState(null);
+  const [analysisError, setAnalysisError] = useState(null);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedTime, setSelectedTime] = useState('');
+  const [fadeIn, setFadeIn] = useState(true);
+  const [showFullReport, setShowFullReport] = useState(false);
+  const [includeStory, setIncludeStory] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const t = translations[lang];
+  const isRTL = lang === 'ar';
+
+  // Helper functions
+  const getAvailableDates = () => {
+    const dates = [];
+    for (let i = 1; i <= 7; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() + i);
+      if (date.getDay() !== 0) dates.push(date.toISOString().split('T')[0]);
+    }
+    return dates;
+  };
+
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString(
+      lang === 'de' ? 'de-DE' : lang === 'tr' ? 'tr-TR' : 'ar-SA',
+      { weekday: 'short', day: 'numeric', month: 'short' }
+    );
+  };
+
+  const handleTransition = (newStep) => {
+    setFadeIn(false);
+    setTimeout(() => {
+      setStep(newStep);
+      setFadeIn(true);
+    }, 300);
+  };
+
+  // Image selection and analysis
+  const handleImageSelect = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64Image = e.target.result;
+      setSelectedImage(base64Image);
+      setIsAnalyzing(true);
+      setAnalyzingStep(0);
+      setAnalysisError(null);
+
+      // Progress animation
+      const steps = t.analyzingSteps.length;
+      let currentStep = 0;
+      const progressInterval = setInterval(() => {
+        currentStep++;
+        setAnalyzingStep(currentStep);
+        if (currentStep >= steps - 1) {
+          clearInterval(progressInterval);
+        }
+      }, 700);
+
+      try {
+        // Call OpenAI API
+        const result = await analyzeWithOpenAI(base64Image, lang, includeStory);
+        setAnalysisResult(result);
+
+        clearInterval(progressInterval);
+        setAnalyzingStep(steps);
+
+        setTimeout(() => {
+          setIsAnalyzing(false);
+          handleTransition(4);
+        }, 500);
+
+      } catch (error) {
+        clearInterval(progressInterval);
+        setIsAnalyzing(false);
+
+        if (error.message === 'API_KEY_NOT_CONFIGURED') {
+          setAnalysisError(t.apiNotConfigured);
+        } else {
+          setAnalysisError(t.analysisError);
+        }
+        handleTransition(2);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const resetApp = () => {
+    setSelectedImage(null);
+    setSelectedDate('');
+    setSelectedTime('');
+    setShowFullReport(false);
+    setAnalysisResult(null);
+    setAnalysisError(null);
+    setIncludeStory(false);
+    handleTransition(0);
+  };
+
+  // Current analysis data
+  const analysis = analysisResult || getMockAnalysis();
+
+  // ============================================
+  // STYLES
+  // ============================================
+  const styles = {
+    container: {
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2319 50%, #1a1a1a 100%)',
+      fontFamily: "'Cormorant Garamond', Georgia, serif",
+      color: '#f5f0e8',
+      direction: isRTL ? 'rtl' : 'ltr'
+    },
+    goldGradient: {
+      background: 'linear-gradient(135deg, #d4af37 0%, #f9e077 50%, #d4af37 100%)',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      backgroundClip: 'text'
+    },
+    goldBorder: {
+      border: '1px solid rgba(212, 175, 55, 0.3)',
+      borderRadius: '16px',
+      background: 'rgba(212, 175, 55, 0.05)',
+      backdropFilter: 'blur(10px)'
+    },
+    button: {
+      width: '100%',
+      padding: '18px 32px',
+      fontSize: '18px',
+      fontFamily: "'Cormorant Garamond', Georgia, serif",
+      fontWeight: '600',
+      border: 'none',
+      borderRadius: '12px',
+      cursor: 'pointer',
+      transition: 'all 0.3s ease',
+      background: 'linear-gradient(135deg, #d4af37 0%, #b8962e 100%)',
+      color: '#1a1a1a',
+      boxShadow: '0 4px 20px rgba(212, 175, 55, 0.3)'
+    },
+    secondaryButton: {
+      width: '100%',
+      padding: '18px 32px',
+      fontSize: '18px',
+      fontFamily: "'Cormorant Garamond', Georgia, serif",
+      fontWeight: '600',
+      border: '1px solid rgba(212, 175, 55, 0.5)',
+      borderRadius: '12px',
+      cursor: 'pointer',
+      transition: 'all 0.3s ease',
+      background: 'transparent',
+      color: '#d4af37'
+    },
+    backButton: {
+      position: 'absolute',
+      top: '24px',
+      left: isRTL ? 'auto' : '24px',
+      right: isRTL ? '24px' : 'auto',
+      background: 'transparent',
+      border: 'none',
+      color: '#d4af37',
+      fontSize: '16px',
+      cursor: 'pointer',
+      fontFamily: "'Cormorant Garamond', Georgia, serif"
+    },
+    section: {
+      border: '1px solid rgba(212, 175, 55, 0.2)',
+      borderRadius: '16px',
+      background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.08) 0%, rgba(212, 175, 55, 0.02) 100%)',
+      padding: '20px',
+      marginBottom: '16px'
+    },
+    errorBox: {
+      background: 'rgba(220, 53, 69, 0.15)',
+      border: '1px solid rgba(220, 53, 69, 0.4)',
+      borderRadius: '12px',
+      padding: '16px',
+      marginBottom: '24px',
+      color: '#ff6b6b',
+      textAlign: 'center'
+    }
+  };
+
+  const keyframes = `
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap');
+    @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes progressPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    button:hover { transform: translateY(-2px); }
+  `;
+
+  // ============================================
+  // SUB-COMPONENTS
+  // ============================================
+  const AnalysisSection = ({ title, icon, children, delay = 0 }) => (
+    <div style={{ ...styles.section, animation: `fadeSlideUp 0.6s ease ${delay}s both` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid rgba(212, 175, 55, 0.15)' }}>
+        <span style={{ fontSize: '24px' }}>{icon}</span>
+        <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#d4af37', margin: 0 }}>{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+
+  const AnalysisRow = ({ label, value, highlight = false }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '10px 0', borderBottom: '1px solid rgba(212, 175, 55, 0.08)' }}>
+      <span style={{ color: 'rgba(245, 240, 232, 0.6)', fontSize: '14px' }}>{label}</span>
+      <span style={{ fontSize: '14px', fontWeight: '500', textAlign: 'right', maxWidth: '60%', color: highlight ? '#d4af37' : '#f5f0e8' }}>
+        {value || '-'}
+      </span>
+    </div>
+  );
+
+  // ============================================
+  // RENDER
+  // ============================================
+  return (
+    <div style={styles.container}>
+      <style>{keyframes}</style>
+
+      {/* Progress Bar */}
+      {step > 0 && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '3px', background: 'rgba(212, 175, 55, 0.2)', zIndex: 100 }}>
+          <div style={{ height: '100%', background: 'linear-gradient(90deg, #d4af37, #f9e077)', transition: 'width 0.5s ease', width: `${((step + 1) / 8) * 100}%` }} />
+        </div>
+      )}
+
+      <div style={{ maxWidth: '480px', margin: '0 auto', minHeight: '100vh', position: 'relative', padding: '24px', boxSizing: 'border-box' }}>
+        <div style={{ opacity: fadeIn ? 1 : 0, transform: fadeIn ? 'translateY(0)' : 'translateY(20px)', transition: 'all 0.4s ease' }}>
+
+          {/* ==================== STEP 0: Language ==================== */}
+          {step === 0 && !isAnalyzing && (
+            <div style={{ paddingTop: '40px', textAlign: 'center' }}>
+              <div style={{ width: '80px', height: '80px', margin: '0 auto 24px', borderRadius: '50%', background: 'linear-gradient(135deg, #d4af37 0%, #f9e077 50%, #d4af37 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px rgba(212, 175, 55, 0.4)', animation: 'pulse 2s ease-in-out infinite' }}>
+                <span style={{ fontSize: '36px' }}>💎</span>
+              </div>
+              <h1 style={{ fontSize: '36px', fontWeight: '300', marginBottom: '12px', ...styles.goldGradient }}>{t.welcome}</h1>
+              <p style={{ fontSize: '16px', opacity: 0.7, marginBottom: '48px' }}>{t.subtitle}</p>
+
+              <p style={{ opacity: 0.5, fontSize: '12px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '24px' }}>{t.selectLanguage}</p>
+
+              <div style={{ display: 'flex', gap: '12px', marginBottom: '32px' }}>
+                {[
+                  { code: 'de', flag: '🇩🇪', name: 'Deutsch' },
+                  { code: 'tr', flag: '🇹🇷', name: 'Türkçe' },
+                  { code: 'ar', flag: '🇸🇦', name: 'العربية' }
+                ].map((language) => (
+                  <button
+                    key={language.code}
+                    onClick={() => setLang(language.code)}
+                    style={{
+                      flex: 1,
+                      padding: '20px',
+                      fontSize: '18px',
+                      fontFamily: "'Cormorant Garamond', Georgia, serif",
+                      border: '1px solid rgba(212, 175, 55, 0.3)',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease',
+                      background: lang === language.code ? 'linear-gradient(135deg, #d4af37 0%, #b8962e 100%)' : 'rgba(212, 175, 55, 0.1)',
+                      color: lang === language.code ? '#1a1a1a' : '#f5f0e8'
+                    }}
+                  >
+                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>{language.flag}</div>
+                    <div style={{ fontSize: '14px' }}>{language.name}</div>
+                  </button>
+                ))}
+              </div>
+
+              <button onClick={() => handleTransition(1)} style={styles.button}>{t.continue}</button>
+
+              <p style={{ marginTop: '24px', fontSize: '11px', opacity: 0.3 }}>
+                {t.poweredBy} • {CONFIG.MODEL}
+              </p>
+            </div>
+          )}
+
+          {/* ==================== STEP 1: Disclaimer ==================== */}
+          {step === 1 && !isAnalyzing && (
+            <div style={{ paddingTop: '60px' }}>
+              <button onClick={() => handleTransition(0)} style={styles.backButton}>← {t.back}</button>
+              <div style={{ ...styles.goldBorder, padding: '32px', marginBottom: '32px', textAlign: 'center' }}>
+                <div style={{ width: '64px', height: '64px', margin: '0 auto 24px', borderRadius: '50%', border: '2px solid #d4af37', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px' }}>ℹ️</div>
+                <h2 style={{ fontSize: '24px', marginBottom: '24px', fontWeight: '400' }}>{t.importantNote}</h2>
+                <div style={{ textAlign: isRTL ? 'right' : 'left', fontSize: '16px', lineHeight: '1.8' }}>
+                  {[t.disclaimer1, t.disclaimer2, t.disclaimer3].map((d, i) => (
+                    <p key={i} style={{ marginBottom: '16px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                      <span style={{ color: '#d4af37' }}>✓</span>{d}
+                    </p>
+                  ))}
+                </div>
+              </div>
+              <button onClick={() => handleTransition(2)} style={styles.button}>{t.understood}</button>
+            </div>
+          )}
+
+          {/* ==================== STEP 2: Upload ==================== */}
+          {step === 2 && !isAnalyzing && (
+            <div style={{ paddingTop: '60px', textAlign: 'center' }}>
+              <button onClick={() => handleTransition(1)} style={styles.backButton}>← {t.back}</button>
+              <h2 style={{ fontSize: '28px', marginBottom: '8px', fontWeight: '300' }}>{t.uploadTitle}</h2>
+              <p style={{ opacity: 0.6, marginBottom: '32px', fontSize: '14px' }}>{t.uploadSubtitle}</p>
+
+              {analysisError && (
+                <div style={styles.errorBox}>
+                  <p style={{ marginBottom: '12px' }}>{analysisError}</p>
+                  <button
+                    onClick={() => setAnalysisError(null)}
+                    style={{ ...styles.secondaryButton, padding: '10px 20px', fontSize: '14px', width: 'auto' }}
+                  >
+                    {t.retryAnalysis}
+                  </button>
+                </div>
+              )}
+
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                onChange={handleImageSelect}
+                style={{ display: 'none' }}
+              />
+
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: '2px dashed rgba(212, 175, 55, 0.4)',
+                  borderRadius: '20px',
+                  padding: '48px 32px',
+                  cursor: 'pointer',
+                  background: 'rgba(212, 175, 55, 0.03)',
+                  marginBottom: '24px',
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                <div style={{ width: '80px', height: '80px', margin: '0 auto 24px', borderRadius: '50%', background: 'rgba(212, 175, 55, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' }}>📷</div>
+                <p style={{ fontSize: '16px', color: '#d4af37', marginBottom: '8px' }}>{t.takePhoto}</p>
+                <p style={{ fontSize: '14px', opacity: 0.5 }}>JPG, PNG, WEBP</p>
+              </div>
+
+              <div
+                onClick={() => setIncludeStory(!includeStory)}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                  marginBottom: '24px', cursor: 'pointer', opacity: 0.9,
+                  background: 'rgba(212, 175, 55, 0.05)', padding: '12px', borderRadius: '12px'
+                }}
+              >
+                <div style={{
+                  width: '20px', height: '20px', borderRadius: '4px',
+                  border: '1px solid #d4af37',
+                  background: includeStory ? '#d4af37' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  {includeStory && <span style={{ color: '#1a1a1a', fontSize: '14px' }}>✓</span>}
+                </div>
+                <span style={{ fontSize: '16px', color: includeStory ? '#d4af37' : '#f5f0e8' }}>{t.storyOption}</span>
+              </div>
+
+              <button onClick={() => fileInputRef.current?.click()} style={styles.secondaryButton}>
+                {t.chooseGallery}
+              </button>
+            </div>
+          )}
+
+          {/* ==================== ANALYZING ==================== */}
+          {isAnalyzing && (
+            <div style={{ paddingTop: '80px', textAlign: 'center' }}>
+              {selectedImage && (
+                <img src={selectedImage} alt="Uploaded" style={{ width: '100%', maxHeight: '200px', objectFit: 'contain', borderRadius: '16px', marginBottom: '32px' }} />
+              )}
+              <div style={{ width: '60px', height: '60px', border: '3px solid rgba(212, 175, 55, 0.2)', borderTop: '3px solid #d4af37', borderRadius: '50%', margin: '0 auto 24px', animation: 'spin 1s linear infinite' }} />
+              <p style={{ fontSize: '20px', marginBottom: '32px', opacity: 0.9 }}>{t.analyzing}</p>
+
+              <div style={{ maxWidth: '280px', margin: '0 auto' }}>
+                {t.analyzingSteps.map((stepText, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', opacity: i <= analyzingStep ? 1 : 0.3, transition: 'opacity 0.5s ease' }}>
+                    <div style={{
+                      width: '28px', height: '28px', borderRadius: '50%',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '12px', fontWeight: '600',
+                      background: i < analyzingStep ? '#d4af37' : 'transparent',
+                      border: i === analyzingStep ? '2px solid #d4af37' : '1px solid rgba(212, 175, 55, 0.3)',
+                      color: i < analyzingStep ? '#1a1a1a' : '#d4af37',
+                      animation: i === analyzingStep ? 'progressPulse 1s ease infinite' : 'none'
+                    }}>
+                      {i < analyzingStep ? '✓' : i + 1}
+                    </div>
+                    <span style={{ fontSize: '14px', textAlign: 'left' }}>{stepText}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ==================== STEP 4: Results ==================== */}
+          {step === 4 && !isAnalyzing && (
+            <div style={{ paddingTop: '60px', paddingBottom: '24px' }}>
+              <button onClick={() => handleTransition(2)} style={styles.backButton}>← {t.back}</button>
+
+              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                <h2 style={{ fontSize: '28px', marginBottom: '8px', fontWeight: '300' }}>{t.result}</h2>
+                <p style={{ fontSize: '12px', opacity: 0.5 }}>{t.resultDisclaimer}</p>
+              </div>
+
+              {/* Confidence Score */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
+                <span style={{ fontSize: '13px', opacity: 0.6 }}>{t.aiConfidence}:</span>
+                <div style={{ width: '120px', height: '8px', borderRadius: '4px', background: 'rgba(212, 175, 55, 0.2)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', background: `linear-gradient(90deg, #d4af37, ${analysis.confidenceScore > 70 ? '#4ade80' : '#f59e0b'})`, width: `${analysis.confidenceScore}%` }} />
+                </div>
+                <span style={{ color: '#d4af37', fontWeight: '600' }}>{analysis.confidenceScore}%</span>
+              </div>
+
+              {selectedImage && (
+                <img src={selectedImage} alt="Analyzed" style={{ width: '100%', maxHeight: '160px', objectFit: 'contain', borderRadius: '12px', marginBottom: '20px', background: 'rgba(0,0,0,0.2)' }} />
+              )}
+
+              {/* Basic Info */}
+              <AnalysisSection title={t.basicInfo} icon="📋" delay={0.2}>
+                <AnalysisRow label={t.category} value={analysis.basic.category} highlight />
+                <AnalysisRow label={t.metalColor} value={analysis.basic.metalColor} />
+                <AnalysisRow label={t.estimatedPurity} value={analysis.basic.estimatedPurity} highlight />
+                <AnalysisRow label={t.estimatedWeight} value={analysis.basic.estimatedWeight} highlight />
+                <AnalysisRow label={t.condition} value={analysis.basic.condition} />
+              </AnalysisSection>
+
+              {/* Story Section */}
+              {analysis.story && analysis.story !== "null" && analysis.story !== null && (
+                <div style={{ ...styles.section, border: '1px solid rgba(212, 175, 55, 0.4)', background: 'rgba(212, 175, 55, 0.05)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '24px' }}>📜</span>
+                    <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#d4af37', margin: 0 }}>{t.storyTitle}</h3>
+                  </div>
+                  <p style={{ fontStyle: 'italic', lineHeight: '1.6', fontSize: '15px', opacity: 0.9 }}>
+                    "{analysis.story}"
+                  </p>
+                </div>
+              )}
+
+              {/* Gemstone */}
+              {analysis.gemstone.detected ? (
+                <AnalysisSection title={t.gemstoneAnalysis} icon="💎" delay={0.3}>
+                  <AnalysisRow label={t.stoneType} value={analysis.gemstone.stoneType} highlight />
+                  <AnalysisRow label={t.stoneCut} value={analysis.gemstone.stoneCut} />
+                  <AnalysisRow label={t.stoneColor} value={analysis.gemstone.stoneColor} />
+                  <AnalysisRow label={t.stoneClarity} value={analysis.gemstone.stoneClarity} />
+                  <AnalysisRow label={t.estimatedCarat} value={analysis.gemstone.estimatedCarat} highlight />
+                  <AnalysisRow label={t.stoneCount} value={analysis.gemstone.stoneCount} />
+                  <AnalysisRow label={t.setting} value={analysis.gemstone.setting} />
+                </AnalysisSection>
+              ) : (
+                <AnalysisSection title={t.gemstoneAnalysis} icon="💎" delay={0.3}>
+                  <p style={{ opacity: 0.6, textAlign: 'center', padding: '16px 0' }}>{t.noGemstone}</p>
+                </AnalysisSection>
+              )}
+
+              {/* Expand Button */}
+              <button
+                onClick={() => setShowFullReport(!showFullReport)}
+                style={{ width: '100%', padding: '14px', marginBottom: '16px', fontSize: '14px', color: '#d4af37', background: 'transparent', border: '1px solid rgba(212, 175, 55, 0.3)', borderRadius: '12px', cursor: 'pointer', fontFamily: "'Cormorant Garamond', Georgia, serif" }}
+              >
+                {showFullReport ? t.hideDetails : t.viewFullReport} {showFullReport ? '▲' : '▼'}
+              </button>
+
+              {showFullReport && (
+                <>
+                  <AnalysisSection title={t.designAnalysis} icon="🎨" delay={0}>
+                    <AnalysisRow label={t.designStyle} value={analysis.design.style} highlight />
+                    <AnalysisRow label={t.era} value={analysis.design.era} highlight />
+                    <AnalysisRow label={t.origin} value={analysis.design.origin} />
+                    <AnalysisRow label={t.craftsmanship} value={analysis.design.craftsmanship} />
+                    <AnalysisRow label={t.pattern} value={analysis.design.pattern} />
+                  </AnalysisSection>
+
+                  <AnalysisSection title={t.technicalDetails} icon="🔍" delay={0.1}>
+                    <AnalysisRow label={t.hallmarkVisible} value={analysis.technical.hallmarkVisible} />
+                    <AnalysisRow label={t.widthThickness} value={analysis.technical.widthThickness} />
+                    <AnalysisRow label={t.specialFeatures} value={analysis.technical.specialFeatures} />
+                  </AnalysisSection>
+                </>
+              )}
+
+              <p style={{ fontSize: '11px', opacity: 0.4, textAlign: 'center', marginBottom: '20px', fontStyle: 'italic' }}>⚠️ {t.finalNote}</p>
+              <button onClick={() => handleTransition(5)} style={styles.button}>{t.continue}</button>
+            </div>
+          )}
+
+          {/* ==================== STEP 5: Gold Prices ==================== */}
+          {step === 5 && !isAnalyzing && (
+            <div style={{ paddingTop: '60px' }}>
+              <button onClick={() => handleTransition(4)} style={styles.backButton}>← {t.back}</button>
+              <h2 style={{ fontSize: '28px', marginBottom: '24px', fontWeight: '300', textAlign: 'center' }}>{t.goldPrices}</h2>
+
+              {goldPrices.map((price, index) => (
+                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', marginBottom: '12px', borderRadius: '12px', background: 'rgba(212, 175, 55, 0.08)', border: '1px solid rgba(212, 175, 55, 0.2)', animation: `fadeSlideUp 0.5s ease ${index * 0.08}s both` }}>
+                  <span style={{ fontWeight: '600' }}>{price.karat}</span>
+                  <span style={{ color: '#d4af37', fontWeight: '600' }}>€{price.price} <span style={{ fontSize: '12px', opacity: 0.7 }}>{t.perGram}</span></span>
+                </div>
+              ))}
+
+              <p style={{ fontSize: '11px', opacity: 0.5, textAlign: 'center', margin: '16px 0 32px' }}>⚠️ {t.priceDisclaimer}</p>
+              <button onClick={() => handleTransition(6)} style={styles.button}>{t.bookAppointment}</button>
+            </div>
+          )}
+
+          {/* ==================== STEP 6: Booking ==================== */}
+          {step === 6 && !isAnalyzing && (
+            <div style={{ paddingTop: '60px' }}>
+              <button onClick={() => handleTransition(5)} style={styles.backButton}>← {t.back}</button>
+              <h2 style={{ fontSize: '28px', marginBottom: '8px', fontWeight: '300', textAlign: 'center' }}>{t.bookAppointment}</h2>
+              <p style={{ opacity: 0.6, marginBottom: '32px', fontSize: '14px', textAlign: 'center' }}>{t.bookSubtitle}</p>
+
+              <p style={{ fontSize: '12px', opacity: 0.5, marginBottom: '12px', letterSpacing: '1px', textTransform: 'uppercase' }}>{t.selectDate}</p>
+              <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '16px', marginBottom: '24px' }}>
+                {getAvailableDates().map((date) => (
+                  <div key={date} onClick={() => setSelectedDate(date)} style={{ minWidth: '90px', padding: '16px 12px', textAlign: 'center', border: '1px solid rgba(212, 175, 55, 0.3)', borderRadius: '12px', cursor: 'pointer', background: selectedDate === date ? 'linear-gradient(135deg, #d4af37 0%, #b8962e 100%)' : 'transparent', color: selectedDate === date ? '#1a1a1a' : '#f5f0e8' }}>
+                    <div style={{ fontSize: '14px', fontWeight: '600' }}>{formatDate(date)}</div>
+                  </div>
+                ))}
+              </div>
+
+              <p style={{ fontSize: '12px', opacity: 0.5, marginBottom: '12px', letterSpacing: '1px', textTransform: 'uppercase' }}>{t.selectTime}</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
+                {availableTimes.map((time) => (
+                  <button key={time} onClick={() => setSelectedTime(time)} style={{ padding: '14px', fontSize: '16px', fontFamily: "'Cormorant Garamond', Georgia, serif", border: '1px solid rgba(212, 175, 55, 0.3)', borderRadius: '10px', cursor: 'pointer', background: selectedTime === time ? 'linear-gradient(135deg, #d4af37 0%, #b8962e 100%)' : 'transparent', color: selectedTime === time ? '#1a1a1a' : '#f5f0e8' }}>
+                    {time}
+                  </button>
+                ))}
+              </div>
+
+              <button onClick={() => handleTransition(7)} disabled={!selectedDate || !selectedTime} style={{ ...styles.button, opacity: (!selectedDate || !selectedTime) ? 0.5 : 1, cursor: (!selectedDate || !selectedTime) ? 'not-allowed' : 'pointer' }}>
+                {t.confirmBooking}
+              </button>
+            </div>
+          )}
+
+          {/* ==================== STEP 7: Confirmation ==================== */}
+          {step === 7 && !isAnalyzing && (
+            <div style={{ paddingTop: '80px', textAlign: 'center' }}>
+              <div style={{ width: '100px', height: '100px', margin: '0 auto 32px', borderRadius: '50%', background: 'linear-gradient(135deg, #d4af37 0%, #f9e077 50%, #d4af37 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px', boxShadow: '0 8px 32px rgba(212, 175, 55, 0.4)' }}>✓</div>
+
+              <h2 style={{ fontSize: '32px', marginBottom: '16px', fontWeight: '300' }}>{t.bookingConfirmed}</h2>
+              <p style={{ opacity: 0.7, marginBottom: '32px', fontSize: '16px' }}>{t.seeYouSoon}</p>
+
+              <div style={{ ...styles.goldBorder, padding: '24px', marginBottom: '32px' }}>
+                <p style={{ fontSize: '14px', opacity: 0.6, marginBottom: '8px' }}>{t.selectDate}</p>
+                <p style={{ fontSize: '20px', fontWeight: '600', color: '#d4af37', marginBottom: '16px' }}>{formatDate(selectedDate)} - {selectedTime}</p>
+                <p style={{ fontSize: '14px', opacity: 0.7 }}>📍 Gold Schmuck GmbH<br />Musterstraße 123, 10115 Berlin</p>
+              </div>
+
+              <button style={styles.secondaryButton}>{t.addToCalendar}</button>
+              <button onClick={resetApp} style={{ ...styles.secondaryButton, marginTop: '12px', border: 'none', opacity: 0.6 }}>{t.startOver}</button>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+}
