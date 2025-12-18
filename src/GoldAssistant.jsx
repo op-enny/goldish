@@ -44,6 +44,16 @@ CRITICAL RULES:
 7. **CRITICAL: All string values in the JSON response MUST be in ${lang}. Only the keys must remain in English.**
 8. Translate technical terms (like 'Diamond', 'Round brilliant', 'Prong') to ${lang}.
 
+DISTINGUISHING WHITE METALS (Important):
+- White Gold vs Silver vs Platinum: These look very similar in photos. Look for clues:
+  * Hallmarks: 750/585/375 = Gold, 925 = Silver, 950 = Platinum
+  * Craftsmanship: Fine jewelry with diamonds usually uses white gold or platinum, rarely silver
+  * Design complexity: Intricate designs with gemstones suggest gold/platinum
+  * Rhodium plating: Bright white shine often indicates white gold with rhodium
+  * If metal type is uncertain between white gold and silver, state BOTH possibilities with reasoning
+- Yellow Gold is easier to identify by its warm color
+- Rose Gold has a pinkish hue
+
 ${includeStory ? `STORY GENERATION (OPTIONAL OPT-IN ACTIVE):
 - Write a short, fictional story about the *spirit* or *style* of this jewelry.
 - **CRITICAL:** DO NOT claim it is centuries old or ancient. Instead, describe how its design *reminds* us of that era or captures that nostalgia.
