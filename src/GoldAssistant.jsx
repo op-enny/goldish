@@ -56,9 +56,15 @@ DISTINGUISHING WHITE METALS (Important):
 
 ${includeStory ? `STORY GENERATION (OPTIONAL OPT-IN ACTIVE):
 - Write a short, fictional story about the *spirit* or *style* of this jewelry.
-- **CRITICAL:** DO NOT claim it is centuries old or ancient. Instead, describe how its design *reminds* us of that era or captures that nostalgia.
-- It can be a vintage piece or a modern piece with a retro soul.
-- Tone: Emotional, slightly melancholic but heartwarming, bringing a smile to the user's face.
+- **CRITICAL:** DO NOT claim it is centuries old or ancient. Instead, describe how its design *reminds* us of a certain era or captures a subtle nostalgia.
+- Each time, choose a DIFFERENT style from this list:
+  1) Mini anecdote (everyday moment)
+  2) Craft/atelier vignette (human touch, making)
+  3) Quiet city scene (modern life, subtle glow)
+  4) Poetic micro-image (gentle metaphor, not heavy)
+- Keep it natural and human. Avoid AI-like phrasing or overly dramatic language.
+- Avoid cliches: "melancholic", "vintage soul", "timeless", "whispers", "centuries", "destiny".
+- Include 1 concrete detail (e.g., "a thin milgrain edge", "a soft scratch", "warm yellow tone").
 - Max 200 characters.
 - "story" field in JSON must contain this text.` : ''}
 
@@ -667,9 +673,16 @@ export default function GoldAssistant() {
   const keyframes = `
     @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeSlideDown { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes progressPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    @keyframes glow { 0%, 100% { box-shadow: 0 0 0 rgba(232, 197, 71, 0); } 50% { box-shadow: 0 0 24px rgba(232, 197, 71, 0.35); } }
+    @keyframes floatIn { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes progressFill { from { width: 0; } to { width: var(--target-width); } }
+    @keyframes snap { 0% { transform: scale(1); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
     button:hover { transform: translateY(-2px); }
+    button:active { transform: translateY(0); }
   `;
 
   // Font definitions
@@ -710,7 +723,7 @@ export default function GoldAssistant() {
       {/* Progress Bar */}
       {step > 0 && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '3px', background: 'rgba(212, 175, 55, 0.2)', zIndex: 100 }}>
-          <div style={{ height: '100%', background: 'linear-gradient(90deg, #d4af37, #f9e077)', transition: 'width 0.5s ease', width: `${((step + 1) / 8) * 100}%` }} />
+          <div style={{ height: '100%', background: 'linear-gradient(90deg, #d4af37, #f9e077)', transition: 'width 0.5s ease', width: `${((step + 1) / 8) * 100}%`, animation: 'fadeSlideDown 0.4s ease' }} />
         </div>
       )}
 
@@ -719,7 +732,7 @@ export default function GoldAssistant() {
 
           {/* ==================== STEP 0: Language ==================== */}
           {step === 0 && !isAnalyzing && (
-            <div style={{ paddingTop: '24px', textAlign: 'center' }}>
+            <div style={{ paddingTop: '24px', textAlign: 'center', animation: 'fadeSlideUp 0.6s ease' }}>
               <div style={{ width: '70px', height: '70px', margin: '0 auto 20px', borderRadius: '50%', background: 'linear-gradient(135deg, #d4af37 0%, #f9e077 50%, #d4af37 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px rgba(212, 175, 55, 0.4)', animation: 'pulse 2s ease-in-out infinite' }}>
                 <span style={{ fontSize: '32px' }}>💎</span>
               </div>
@@ -750,7 +763,8 @@ export default function GoldAssistant() {
                       color: lang === language.code ? '#1a1a1a' : '#f8f5f0',
                       minHeight: '70px',
                       touchAction: 'manipulation',
-                      fontWeight: '500'
+                      fontWeight: '500',
+                      animation: lang === language.code ? 'snap 0.22s ease' : 'none'
                     }}
                   >
                     <div style={{ fontSize: '24px', marginBottom: '6px' }}>{language.flag}</div>
@@ -759,7 +773,7 @@ export default function GoldAssistant() {
                 ))}
               </div>
 
-              <button onClick={() => handleTransition(1)} style={styles.button}>{t.continue}</button>
+              <button onClick={() => handleTransition(1)} style={{ ...styles.button, animation: 'floatIn 0.6s ease 0.2s both' }}>{t.continue}</button>
 
               <p style={{ marginTop: '20px', fontSize: '12px', opacity: 0.5 }}>
                 {t.poweredBy} • {CONFIG.MODEL}
@@ -769,9 +783,9 @@ export default function GoldAssistant() {
 
           {/* ==================== STEP 1: Disclaimer ==================== */}
           {step === 1 && !isAnalyzing && (
-            <div style={{ paddingTop: '50px' }}>
+            <div style={{ paddingTop: '50px', animation: 'fadeSlideUp 0.6s ease' }}>
               <button onClick={() => handleTransition(0)} style={styles.backButton}>← {t.back}</button>
-              <div style={{ ...styles.goldBorder, padding: '24px', marginBottom: '24px', textAlign: 'center' }}>
+              <div style={{ ...styles.goldBorder, padding: '24px', marginBottom: '24px', textAlign: 'center', animation: 'floatIn 0.6s ease 0.1s both' }}>
                 <div style={{ width: '60px', height: '60px', margin: '0 auto 18px', borderRadius: '50%', border: '2px solid #e8c547', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px' }}>ℹ️</div>
                 <h2 style={{ fontSize: '26px', marginBottom: '22px', fontWeight: '600', fontFamily: fonts.heading }}>{t.importantNote}</h2>
                 <div style={{ textAlign: isRTL ? 'right' : 'left', fontSize: '16px', lineHeight: '1.7' }}>
@@ -783,13 +797,13 @@ export default function GoldAssistant() {
                   ))}
                 </div>
               </div>
-              <button onClick={() => handleTransition(2)} style={styles.button}>{t.understood}</button>
+              <button onClick={() => handleTransition(2)} style={{ ...styles.button, animation: 'floatIn 0.6s ease 0.25s both' }}>{t.understood}</button>
             </div>
           )}
 
           {/* ==================== STEP 2: Upload ==================== */}
           {step === 2 && !isAnalyzing && (
-            <div style={{ paddingTop: '50px', textAlign: 'center' }}>
+            <div style={{ paddingTop: '50px', textAlign: 'center', animation: 'fadeSlideUp 0.6s ease' }}>
               <button onClick={() => handleTransition(1)} style={styles.backButton}>← {t.back}</button>
               <h2 style={{ fontSize: '28px', marginBottom: '10px', fontWeight: '600', fontFamily: fonts.heading }}>{t.uploadTitle}</h2>
               <p style={{ opacity: 0.8, marginBottom: '24px', fontSize: '16px' }}>{t.uploadSubtitle}</p>
@@ -822,10 +836,12 @@ export default function GoldAssistant() {
                   borderRadius: '16px',
                   padding: '32px 20px',
                   cursor: 'pointer',
-                  background: 'rgba(232, 197, 71, 0.05)',
+                  background: 'linear-gradient(90deg, rgba(232, 197, 71, 0.05), rgba(232, 197, 71, 0.12), rgba(232, 197, 71, 0.05))',
+                  backgroundSize: '200% 100%',
                   marginBottom: '16px',
                   transition: 'all 0.2s ease',
-                  touchAction: 'manipulation'
+                  touchAction: 'manipulation',
+                  animation: 'shimmer 3.5s ease-in-out infinite'
                 }}
               >
                 <div style={{ width: '68px', height: '68px', margin: '0 auto 16px', borderRadius: '50%', background: 'rgba(232, 197, 71, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px' }}>📷</div>
@@ -855,7 +871,7 @@ export default function GoldAssistant() {
                 <span style={{ fontSize: '16px', color: includeStory ? '#e8c547' : '#f8f5f0', fontWeight: '500' }}>{t.storyOption}</span>
               </div>
 
-              <button onClick={() => fileInputRef.current?.click()} style={styles.secondaryButton}>
+              <button onClick={() => fileInputRef.current?.click()} style={{ ...styles.secondaryButton, animation: 'floatIn 0.6s ease 0.2s both' }}>
                 {t.chooseGallery}
               </button>
             </div>
@@ -863,11 +879,11 @@ export default function GoldAssistant() {
 
           {/* ==================== ANALYZING ==================== */}
           {isAnalyzing && (
-            <div style={{ paddingTop: '80px', textAlign: 'center' }}>
+            <div style={{ paddingTop: '80px', textAlign: 'center', animation: 'fadeSlideUp 0.6s ease' }}>
               {selectedImage && (
                 <img src={selectedImage} alt="Uploaded" style={{ width: '100%', maxHeight: '200px', objectFit: 'contain', borderRadius: '16px', marginBottom: '32px' }} />
               )}
-              <div style={{ width: '64px', height: '64px', border: '3px solid rgba(232, 197, 71, 0.25)', borderTop: '3px solid #e8c547', borderRadius: '50%', margin: '0 auto 24px', animation: 'spin 1s linear infinite' }} />
+              <div style={{ width: '64px', height: '64px', border: '3px solid rgba(232, 197, 71, 0.25)', borderTop: '3px solid #e8c547', borderRadius: '50%', margin: '0 auto 24px', animation: 'spin 1s linear infinite, glow 2.4s ease-in-out infinite' }} />
               <p style={{ fontSize: '24px', marginBottom: '32px', fontWeight: '500', fontFamily: fonts.heading }}>{t.analyzing}</p>
 
               <div style={{ maxWidth: '300px', margin: '0 auto' }}>
@@ -893,7 +909,7 @@ export default function GoldAssistant() {
 
           {/* ==================== STEP 4: Results ==================== */}
           {step === 4 && !isAnalyzing && (
-            <div style={{ paddingTop: '50px', paddingBottom: '20px' }}>
+            <div style={{ paddingTop: '50px', paddingBottom: '20px', animation: 'fadeSlideUp 0.6s ease' }}>
               <button onClick={() => handleTransition(2)} style={styles.backButton}>← {t.back}</button>
 
               <div style={{ textAlign: 'center', marginBottom: '18px' }}>
@@ -905,7 +921,15 @@ export default function GoldAssistant() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '18px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '14px', opacity: 0.8 }}>{t.aiConfidence}:</span>
                 <div style={{ width: '110px', height: '8px', borderRadius: '4px', background: 'rgba(232, 197, 71, 0.25)', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', background: `linear-gradient(90deg, #e8c547, ${analysis.confidenceScore > 70 ? '#4ade80' : '#f59e0b'})`, width: `${analysis.confidenceScore}%` }} />
+                  <div
+                    style={{
+                      height: '100%',
+                      background: `linear-gradient(90deg, #e8c547, ${analysis.confidenceScore > 70 ? '#4ade80' : '#f59e0b'})`,
+                      width: `${analysis.confidenceScore}%`,
+                      '--target-width': `${analysis.confidenceScore}%`,
+                      animation: 'progressFill 1s ease'
+                    }}
+                  />
                 </div>
                 <span style={{ color: '#e8c547', fontWeight: '600', fontSize: '16px' }}>{analysis.confidenceScore}%</span>
               </div>
@@ -980,13 +1004,13 @@ export default function GoldAssistant() {
               )}
 
               <p style={{ fontSize: '13px', opacity: 0.7, textAlign: 'center', marginBottom: '20px', fontStyle: 'italic' }}>⚠️ {t.finalNote}</p>
-              <button onClick={() => handleTransition(5)} style={styles.button}>{t.continue}</button>
+              <button onClick={() => handleTransition(5)} style={{ ...styles.button, animation: 'floatIn 0.6s ease 0.2s both' }}>{t.continue}</button>
             </div>
           )}
 
           {/* ==================== STEP 5: Gold Prices ==================== */}
           {step === 5 && !isAnalyzing && (
-            <div style={{ paddingTop: '50px' }}>
+            <div style={{ paddingTop: '50px', animation: 'fadeSlideUp 0.6s ease' }}>
               <button onClick={() => handleTransition(4)} style={styles.backButton}>← {t.back}</button>
               <h2 style={{ fontSize: '26px', marginBottom: '22px', fontWeight: '600', textAlign: 'center', fontFamily: fonts.heading }}>{t.goldPrices}</h2>
 
@@ -1004,7 +1028,7 @@ export default function GoldAssistant() {
 
           {/* ==================== STEP 6: Booking ==================== */}
           {step === 6 && !isAnalyzing && (
-            <div style={{ paddingTop: '50px' }}>
+            <div style={{ paddingTop: '50px', animation: 'fadeSlideUp 0.6s ease' }}>
               <button onClick={() => handleTransition(5)} style={styles.backButton}>← {t.back}</button>
               <h2 style={{ fontSize: '26px', marginBottom: '8px', fontWeight: '600', textAlign: 'center', fontFamily: fonts.heading }}>{t.bookAppointment}</h2>
               <p style={{ opacity: 0.8, marginBottom: '24px', fontSize: '15px', textAlign: 'center' }}>{t.bookSubtitle}</p>
@@ -1012,7 +1036,23 @@ export default function GoldAssistant() {
               <p style={{ fontSize: '13px', opacity: 0.7, marginBottom: '12px', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: '500' }}>{t.selectDate}</p>
               <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '22px', WebkitOverflowScrolling: 'touch' }}>
                 {getAvailableDates().map((date) => (
-                  <div key={date} onClick={() => setSelectedDate(date)} style={{ minWidth: '85px', padding: '14px 12px', textAlign: 'center', border: '2px solid rgba(232, 197, 71, 0.4)', borderRadius: '10px', cursor: 'pointer', background: selectedDate === date ? 'linear-gradient(135deg, #e8c547 0%, #d4af37 100%)' : 'transparent', color: selectedDate === date ? '#1a1a1a' : '#f8f5f0', touchAction: 'manipulation', flexShrink: 0 }}>
+                  <div
+                    key={date}
+                    onClick={() => setSelectedDate(date)}
+                    style={{
+                      minWidth: '85px',
+                      padding: '14px 12px',
+                      textAlign: 'center',
+                      border: '2px solid rgba(232, 197, 71, 0.4)',
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      background: selectedDate === date ? 'linear-gradient(135deg, #e8c547 0%, #d4af37 100%)' : 'transparent',
+                      color: selectedDate === date ? '#1a1a1a' : '#f8f5f0',
+                      touchAction: 'manipulation',
+                      flexShrink: 0,
+                      animation: selectedDate === date ? 'snap 0.22s ease' : 'none'
+                    }}
+                  >
                     <div style={{ fontSize: '15px', fontWeight: '600' }}>{formatDate(date)}</div>
                   </div>
                 ))}
@@ -1021,7 +1061,24 @@ export default function GoldAssistant() {
               <p style={{ fontSize: '13px', opacity: 0.7, marginBottom: '12px', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: '500' }}>{t.selectTime}</p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '24px' }}>
                 {availableTimes.map((time) => (
-                  <button key={time} onClick={() => setSelectedTime(time)} style={{ padding: '14px 8px', fontSize: '17px', fontFamily: fonts.body, fontWeight: '500', border: '2px solid rgba(232, 197, 71, 0.4)', borderRadius: '8px', cursor: 'pointer', background: selectedTime === time ? 'linear-gradient(135deg, #e8c547 0%, #d4af37 100%)' : 'transparent', color: selectedTime === time ? '#1a1a1a' : '#f8f5f0', minHeight: '52px', touchAction: 'manipulation' }}>
+                  <button
+                    key={time}
+                    onClick={() => setSelectedTime(time)}
+                    style={{
+                      padding: '14px 8px',
+                      fontSize: '17px',
+                      fontFamily: fonts.body,
+                      fontWeight: '500',
+                      border: '2px solid rgba(232, 197, 71, 0.4)',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      background: selectedTime === time ? 'linear-gradient(135deg, #e8c547 0%, #d4af37 100%)' : 'transparent',
+                      color: selectedTime === time ? '#1a1a1a' : '#f8f5f0',
+                      minHeight: '52px',
+                      touchAction: 'manipulation',
+                      animation: selectedTime === time ? 'snap 0.22s ease' : 'none'
+                    }}
+                  >
                     {time}
                   </button>
                 ))}
@@ -1035,7 +1092,7 @@ export default function GoldAssistant() {
 
           {/* ==================== STEP 7: Confirmation ==================== */}
           {step === 7 && !isAnalyzing && (
-            <div style={{ paddingTop: '60px', textAlign: 'center' }}>
+            <div style={{ paddingTop: '60px', textAlign: 'center', animation: 'fadeSlideUp 0.6s ease' }}>
               <div style={{ width: '85px', height: '85px', margin: '0 auto 26px', borderRadius: '50%', background: 'linear-gradient(135deg, #e8c547 0%, #f9e077 50%, #d4af37 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', boxShadow: '0 8px 32px rgba(232, 197, 71, 0.45)' }}>✓</div>
 
               <h2 style={{ fontSize: '28px', marginBottom: '14px', fontWeight: '600', fontFamily: fonts.heading }}>{t.bookingConfirmed}</h2>
